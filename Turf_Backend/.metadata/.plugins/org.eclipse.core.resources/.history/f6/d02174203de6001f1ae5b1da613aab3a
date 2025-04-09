@@ -1,0 +1,59 @@
+package com.example.turf.model;
+
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+import java.time.LocalDateTime;
+
+@Entity
+@Getter
+@Setter
+@AllArgsConstructor
+@NoArgsConstructor
+public class BookedTurf {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long bookingId;
+
+    @Column(name = "booking_date")
+    private LocalDateTime bookingDate;
+
+    @Column(name = "start_time")
+    private LocalDateTime startTime;
+
+    @Column(name = "end_time")
+    private LocalDateTime endTime;
+
+    @Column(name = "guest_fullName")
+    private String guestFullName;
+
+    @Column(name = "guest_email")
+    private String guestEmail;
+
+    @Column(name = "total_players")
+    private int totalPlayers;
+
+    @Column(name = "confirmation_code")
+    private String bookingConfirmationCode;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "turf_id")
+    private Turf turf;
+
+    public void setTotalPlayers(int totalPlayers) {
+        this.totalPlayers = totalPlayers;
+    }
+
+    public void setBookingConfirmationCode(String bookingConfirmationCode) {
+        this.bookingConfirmationCode = bookingConfirmationCode;
+    }
+
+    // Optional: If you want to check the total booking duration
+    public long calculateBookingDurationInMinutes() {
+        return java.time.Duration.between(this.startTime, this.endTime).toMinutes();
+    }
+}

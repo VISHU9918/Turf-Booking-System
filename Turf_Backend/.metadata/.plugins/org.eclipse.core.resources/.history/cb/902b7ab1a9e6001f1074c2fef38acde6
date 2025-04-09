@@ -1,0 +1,107 @@
+package com.example.turf.service;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+
+import com.example.turf.exception.InternalServerException;
+import com.example.turf.exception.ResourceNotFoundException;
+import com.example.turf.model.Turf;
+import com.example.turf.repository.TurfRepository;
+
+import javax.sql.rowset.serial.SerialBlob;
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.sql.Blob;
+import java.sql.SQLException;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
+
+@Service
+@RequiredArgsConstructor
+public class TurfService implements ITurfService {
+
+    private final TurfRepository turfRepository;
+
+    @Override
+    public Turf addNewTurf(MultipartFile file, String turfLocation, BigDecimal turfPrice) throws SQLException, IOException {
+        Turf turf = new Turf();
+        turf.setTurfLocation(turfLocation);  // Changed from turfType to turfLocation
+        turf.setTurfPrice(turfPrice);
+
+        if (!file.isEmpty()) {
+            byte[] photoBytes = file.getBytes();
+            Blob photoBlob = new SerialBlob(photoBytes);
+            turf.setPhoto(photoBlob);
+        }
+
+        return turfRepository.save(turf);
+    }
+
+    @Override
+    public List<String> getAllTurfLocations() {
+        return turfRepository.findDistinctTurfLocations();  // Changed from findDistinctTurfTypes to findDistinctTurfLocations
+    }
+
+    @Override
+    public List<Turf> getAllTurfs() {
+        return turfRepository.findAll();
+    }
+
+    @Override
+    public byte[] getTurfPhotoById(Long turfId) throws SQLException {
+        Optional<Turf> theTurf = turfRepository.findById(turfId);
+        if (theTurf.isEmpty()) {
+            throw new ResourceNotFoundException("Sorry, Turf not found!");
+        }
+        Blob photoBlob = theTurf.get().getPhoto();
+        if (photoBlob != null) {
+            return photoBlob.getBytes(1, (int) photoBlob.length());
+        }
+        return null;
+    }
+
+    @Override
+    public void deleteTurf(Long turfId) {
+        Optional<Turf> theTurf = turfRepository.findById(turfId);
+        if (theTurf.isPresent()) {
+            turfRepository.deleteById(turfId);
+        }
+    }
+
+    @Override
+    public Turf updateTurf(Long turfId, String turfLocation, BigDecimal turfPrice, byte[] photoBytes) {
+        Turf turf = turfRepository.findById(turfId)
+                .orElseThrow(() -> new ResourceNotFoundException("Turf not found with ID: " + turfId));
+
+        if (turfLocation != null) turf.setTurfLocation(turfLocation);  
+        if (turfPrice != null) turf.setTurfPrice(turfPrice);
+
+        if (photoBytes != null && photoBytes.length > 0) {
+            try {
+                turf.setPhoto(new SerialBlob(photoBytes));
+            } catch (SQLException ex) {
+                throw new InternalServerException("Failed to update turf photo.");
+            }
+        }
+
+        return turfRepository.save(turf);
+    }
+
+    @Override
+    public Optional<Turf> getTurfById(Long turfId) {
+        return turfRepository.findById(turfId);
+    }
+
+    @Override
+    public List<Turf> getAvailableTurfs(LocalDate checkInDate, LocalDate checkOutDate, String turfLocation) {
+        return turfRepository.findAvailableTurfsByDatesAndLocation(checkInDate, checkOutDate, turfLocation);  // Changed from turfType to turfLocation
+    }
+
+    @Override
+    public byte[] getTurfPhotoByTurfId(Long turfId) throws SQLException {
+        // TODO: Implement this method as needed
+        return null;
+    }
+}

@@ -1,0 +1,79 @@
+package com.example.turf.service;
+
+import jakarta.transaction.Transactional;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+
+import com.example.turf.exception.UserAlreadyExistsException;
+import com.example.turf.model.Role;
+import com.example.turf.model.User;
+import com.example.turf.repository.RoleRepository;
+import com.example.turf.repository.UserRepository;
+
+import java.util.Collections;
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+public class UserService implements IUserService {
+    
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final RoleRepository roleRepository;
+
+    @Override
+    public User registerUser(User user) {
+        // Check if the user already exists by email
+        if (userRepository.existsByEmail(user.getEmail())) {
+            throw new UserAlreadyExistsException(user.getEmail() + " already exists");
+        }
+        
+        // Encode the user's password before saving
+        user.setPassword(passwordEncoder.encode(user.getPassword()));
+        
+        // Fetch the role to assign it to the user
+        Role userRole = roleRepository.findByName("ROLE_USER")
+                .orElseThrow(() -> new RuntimeException("Role ROLE_USER not found"));
+
+        // Set roles and save the user
+        user.setRoles(Collections.singletonList(userRole));
+        return userRepository.save(user);
+    }
+
+    @Override
+    public List<User> getUsers() {
+        return userRepository.findAll();
+    }
+
+    @Transactional
+    @Override
+    public void deleteUser(String email) {
+        // Fetch the user to be deleted
+        User theUser = getUser(email);
+        if (theUser != null) {
+            // Delete the user by email
+            userRepository.deleteByEmail(email);
+        }
+    }
+
+    @Override
+    public User getUser(String email) {
+        // Fetch the user by email, throwing an exception if not found
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + email));
+    }
+
+	@Override
+	public User updateUser(String email, User userDetails) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public User createUser(User newUser) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+}

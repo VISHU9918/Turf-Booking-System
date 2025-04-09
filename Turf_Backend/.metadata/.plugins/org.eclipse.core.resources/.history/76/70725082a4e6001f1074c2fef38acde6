@@ -1,0 +1,20 @@
+package com.example.turf.service;
+
+import java.util.List;
+
+import com.example.turf.model.User; 
+
+public interface IUserService {
+
+    // Register a new User (e.g., customer or admin) in the system
+    User registerUser(User user);
+
+    // Get all registered Users in the system
+    List<User> getUsers();
+
+    // Delete a User by their email
+    void deleteUser(String email);
+
+    // Get a User's information by their email
+    User getUser(String email);
+}

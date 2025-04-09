@@ -1,0 +1,5 @@
+package com.example.turf.service;
+
+public interface IBookingService {
+
+}

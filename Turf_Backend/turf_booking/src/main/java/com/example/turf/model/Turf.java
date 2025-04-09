@@ -1,0 +1,59 @@
+package com.example.turf.model;
+
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.Setter;
+import org.apache.commons.lang3.RandomStringUtils;
+
+import java.math.BigDecimal;
+import java.sql.Blob;
+import java.util.ArrayList;
+import java.util.List;
+
+@Entity
+@Getter
+@Setter
+@AllArgsConstructor
+public class Turf {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String turfLocation; 
+    private BigDecimal turfPrice; 
+    private boolean isBooked = false;
+
+    @Lob
+    private Blob photo; // Turf photo
+
+    @OneToMany(mappedBy = "turf", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    private List<BookedTurf> bookings;
+
+    // Default constructor
+    public Turf() {
+        this.bookings = new ArrayList<>();
+    }
+
+    // Add a booking to the turf
+    public void addBooking(BookedTurf booking) {
+        if (bookings == null) {
+            bookings = new ArrayList<>();
+        }
+        bookings.add(booking);
+        booking.setTurf(this);
+        isBooked = true; // Mark as booked once a booking is added
+        String bookingCode = RandomStringUtils.randomNumeric(10); // Generate a random confirmation code
+        booking.setBookingConfirmationCode(bookingCode);
+    }
+
+    // Optional: Remove booking from the turf (if needed)
+    public void removeBooking(BookedTurf booking) {
+        bookings.remove(booking);
+        booking.setTurf(null);
+        if (bookings.isEmpty()) {
+            isBooked = false; // Mark turf as not booked if no bookings exist
+        }
+    }
+}

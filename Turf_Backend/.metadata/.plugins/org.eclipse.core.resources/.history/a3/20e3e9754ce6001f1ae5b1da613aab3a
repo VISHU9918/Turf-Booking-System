@@ -1,0 +1,37 @@
+package com.example.turf.response;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.time.LocalDate;
+
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class BookingResponse {
+
+    private Long id;
+
+    private LocalDate startDate;  // Renaming to better represent the booking start date
+
+    private LocalDate endDate;    // Renaming to better represent the booking end date
+
+    private String guestName;
+
+    private String guestEmail;
+
+    private int totalPlayers;  // Renaming to reflect the number of players (instead of numOfAdults/numOfChildren)
+
+    private String bookingConfirmationCode;
+
+    private TurfResponse turf;  // Renaming 'room' to 'turf' to represent the booked turf
+
+    // Constructor with basic fields
+    public BookingResponse(Long id, LocalDate startDate, LocalDate endDate, String bookingConfirmationCode) {
+        this.id = id;
+        this.startDate = startDate;
+        this.endDate = endDate;
+        this.bookingConfirmationCode = bookingConfirmationCode;
+    }
+}

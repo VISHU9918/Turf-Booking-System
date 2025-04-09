@@ -1,0 +1,102 @@
+package com.example.turf.service;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+
+import com.example.turf.exception.InvalidBookingRequestException;  // Use Turf system's exception
+import com.example.turf.exception.ResourceNotFoundException;  // Use Turf system's exception
+import com.example.turf.model.BookedTurf;  // Assuming BookedRoom is now BookedTurfSlot
+import com.example.turf.model.Turf;  // Assuming Room is now Turf (field name updated accordingly)
+import com.example.turf.repository.BookingRepository;  // The repository for bookings
+import com.example.turf.service.IRoomService;  // Interface for room services, possibly renamed TurfService
+
+import java.util.List;
+import java.util.Optional;
+
+@Service
+@RequiredArgsConstructor
+public abstract class BookingService implements IBookingService {
+    private final BookingRepository bookingRepository;
+    private final IRoomService turfService;  // Change reference to TurfService
+
+
+    @Override
+    public List getAllBookings() {
+        return bookingRepository.findAll();
+    }
+
+    @Override
+    public List getBookingsByUserEmail(String email) {
+        return bookingRepository.findByGuestEmail(email);
+    }
+
+    @Override
+    public void cancelBooking(Long bookingId) {
+        bookingRepository.deleteById(bookingId);
+    }
+
+    @Override
+    public List<BookedTurf> getAllBookingsByTurfId(Long turfId) {
+        return bookingRepository.findByTurfId(turfId);
+    }
+
+    @Override
+    public String saveBooking(Long turfId, BookedTurf bookingRequest) {
+        if (bookingRequest.getCheckOutDate().isBefore(bookingRequest.getCheckInDate())) {
+            throw new InvalidBookingRequestException("Check-in date must come before check-out date");
+        }
+
+        // Fetch the turf slot by ID (renamed from room)
+        Turf turf = turfService.getTurfById(turfId).orElseThrow(() -> new ResourceNotFoundException("Turf not found with id: " + turfId));
+        List<BookedTurf> existingBookings = turf.getBookings();
+        
+        // Check if the turf is available for the selected dates
+        boolean turfIsAvailable = turfIsAvailable(bookingRequest, existingBookings);
+        
+        if (turfIsAvailable) {
+            turf.addBooking(bookingRequest);
+            bookingRepository.save(bookingRequest);
+        } else {
+            throw new InvalidBookingRequestException("Sorry, this turf slot is not available for the selected dates.");
+        }
+
+        return bookingRequest.getBookingConfirmationCode();
+    }
+
+    @Override
+    public BookedTurf findByBookingConfirmationCode(String confirmationCode) {
+        return bookingRepository.findByBookingConfirmationCode(confirmationCode)
+                .orElseThrow(() -> new ResourceNotFoundException("No booking found with booking code: " + confirmationCode));
+    }
+
+    // Helper method to check if turf slot is available
+    private boolean turfIsAvailable(BookedTurf bookingRequest, List<BookedTurf> existingBookings) {
+        return existingBookings.stream()
+                .noneMatch(existingBooking ->
+                        bookingRequest.getCheckInDate().equals(existingBooking.getCheckInDate()) ||
+                        bookingRequest.getCheckOutDate().isBefore(existingBooking.getCheckOutDate()) ||
+                        (bookingRequest.getCheckInDate().isAfter(existingBooking.getCheckInDate()) &&
+                         bookingRequest.getCheckInDate().isBefore(existingBooking.getCheckOutDate())) ||
+                        (bookingRequest.getCheckInDate().isBefore(existingBooking.getCheckInDate()) &&
+                         bookingRequest.getCheckOutDate().equals(existingBooking.getCheckOutDate())) ||
+                        (bookingRequest.getCheckInDate().isBefore(existingBooking.getCheckInDate()) &&
+                         bookingRequest.getCheckOutDate().isAfter(existingBooking.getCheckOutDate())) ||
+                        (bookingRequest.getCheckInDate().equals(existingBooking.getCheckOutDate()) &&
+                         bookingRequest.getCheckOutDate().equals(existingBooking.getCheckInDate())) ||
+                        (bookingRequest.getCheckInDate().equals(existingBooking.getCheckOutDate()) &&
+                         bookingRequest.getCheckOutDate().equals(bookingRequest.getCheckInDate()))
+                );
+    }
+
+	@Override
+	public List<BookedTurf> getAllBookingsByRoomId(Long turfId) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public String saveBooking(Long turfId, BookedTurf bookingRequest) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+}

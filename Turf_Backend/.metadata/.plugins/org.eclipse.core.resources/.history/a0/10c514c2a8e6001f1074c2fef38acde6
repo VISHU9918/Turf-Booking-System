@@ -1,0 +1,151 @@
+package com.example.turf.controller;
+
+import lombok.RequiredArgsConstructor;
+import org.apache.tomcat.util.codec.binary.Base64;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import com.example.turf.exception.PhotoRetrievalException;
+import com.example.turf.exception.ResourceNotFoundException;
+import com.example.turf.model.BookedTurf;
+import com.example.turf.model.Turf;
+import com.example.turf.response.BookingResponse;
+import com.example.turf.response.TurfResponse;
+import com.example.turf.service.BookingService;
+import com.example.turf.service.ITurfService;
+
+import javax.sql.rowset.serial.SerialBlob;
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.sql.Blob;
+import java.sql.SQLException;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+
+@RestController
+@RequiredArgsConstructor
+@RequestMapping("/turfs")
+public class TurfController {
+    
+    private final ITurfService turfService;
+    private final BookingService bookingService;
+
+    @PostMapping("/add/new-turf")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    public ResponseEntity<TurfResponse> addNewTurf(
+            @RequestParam("photo") MultipartFile photo,
+            @RequestParam("turfType") String turfType,
+            @RequestParam("turfPrice") BigDecimal turfPrice) throws SQLException, IOException {
+        Turf savedTurf = turfService.addNewTurf(photo, turfType, turfPrice);
+        TurfResponse response = new TurfResponse(savedTurf.getId(), savedTurf.getTurfLocation(),
+                savedTurf.getTurfPrice());
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/turf/types")
+    public List<String> getTurfTypes() {
+        return turfService.getAllTurfTypes();
+    }
+
+    @GetMapping("/all-turfs")
+    public ResponseEntity<List<TurfResponse>> getAllTurfs() throws SQLException {
+        List<Turf> turfs = turfService.getAllTurfs();
+        List<TurfResponse> turfResponses = new ArrayList<>();
+        for (Turf turf : turfs) {
+            byte[] photoBytes = turfService.getTurfPhotoByTurfId(turf.getId());
+            if (photoBytes != null && photoBytes.length > 0) {
+                String base64Photo = Base64.encodeBase64String(photoBytes);
+                TurfResponse turfResponse = getTurfResponse(turf);
+                turfResponse.setPhoto(base64Photo);
+                turfResponses.add(turfResponse);
+            }
+        }
+        return ResponseEntity.ok(turfResponses);
+    }
+
+    @DeleteMapping("/delete/turf/{turfId}")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    public ResponseEntity<Void> deleteTurf(@PathVariable Long turfId) {
+        turfService.deleteTurf(turfId);
+        return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+    }
+
+    @PutMapping("/update/{turfId}")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    public ResponseEntity<TurfResponse> updateTurf(@PathVariable Long turfId,
+            @RequestParam(required = false) String turfType,
+            @RequestParam(required = false) BigDecimal turfPrice,
+            @RequestParam(required = false) MultipartFile photo) throws SQLException, IOException {
+        byte[] photoBytes = photo != null && !photo.isEmpty() ? photo.getBytes()
+                : turfService.getTurfPhotoByTurfId(turfId);
+        Blob photoBlob = photoBytes != null && photoBytes.length > 0 ? new SerialBlob(photoBytes) : null;
+        Turf theTurf = turfService.updateTurf(turfId, turfType, turfPrice, photoBytes);
+        theTurf.setPhoto(photoBlob);
+        TurfResponse turfResponse = getTurfResponse(theTurf);
+        return ResponseEntity.ok(turfResponse);
+    }
+
+    @GetMapping("/turf/{turfId}")
+    public ResponseEntity<Optional<TurfResponse>> getTurfById(@PathVariable Long turfId) {
+        Optional<Turf> theTurf = turfService.getTurfById(turfId);
+        return theTurf.map(turf -> {
+            TurfResponse turfResponse = getTurfResponse(turf);
+            return ResponseEntity.ok(Optional.of(turfResponse));
+        }).orElseThrow(() -> new ResourceNotFoundException("Turf not found"));
+    }
+
+    @GetMapping("/available-turfs")
+    public ResponseEntity<List<TurfResponse>> getAvailableTurfs(
+            @RequestParam("checkInDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate checkInDate,
+            @RequestParam("checkOutDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate checkOutDate,
+            @RequestParam("turfType") String turfType) throws SQLException {
+        List<Turf> availableTurfs = turfService.getAvailableTurfs(checkInDate, checkOutDate, turfType);
+        List<TurfResponse> turfResponses = new ArrayList<>();
+        for (Turf turf : availableTurfs) {
+            byte[] photoBytes = turfService.getTurfPhotoByTurfId(turf.getId());
+            if (photoBytes != null && photoBytes.length > 0) {
+                String photoBase64 = Base64.encodeBase64String(photoBytes);
+                TurfResponse turfResponse = getTurfResponse(turf);
+                turfResponse.setPhoto(photoBase64);
+                turfResponses.add(turfResponse);
+            }
+        }
+        if (turfResponses.isEmpty()) {
+            return ResponseEntity.noContent().build();
+        } else {
+            return ResponseEntity.ok(turfResponses);
+        }
+    }
+
+    private TurfResponse getTurfResponse(Turf turf) {
+        List<BookedTurf> bookings = getAllBookingsByTurfId(turf.getId());
+        List<BookingResponse> bookingInfo = bookings
+                .stream()
+                .map(booking -> new BookingResponse(booking.getBookingId(),
+                        booking.getCheckInDate(),
+                        booking.getCheckOutDate(), booking.getBookingConfirmationCode()))
+                .toList();
+        byte[] photoBytes = null;
+        Blob photoBlob = turf.getPhoto();
+        if (photoBlob != null) {
+            try {
+                photoBytes = photoBlob.getBytes(1, (int) photoBlob.length());
+            } catch (SQLException e) {
+                throw new PhotoRetrievalException("Error retrieving photo");
+            }
+        }
+        return new TurfResponse(turf.getId(),
+                turf.getTurfType(), turf.getTurfPrice(),
+                turf.isBooked(), photoBytes, bookingInfo);
+    }
+
+    private List<BookedTurf> getAllBookingsByTurfId(Long turfId) {
+        return bookingService.getAllBookingsByTurfId(turfId);
+    }
+}

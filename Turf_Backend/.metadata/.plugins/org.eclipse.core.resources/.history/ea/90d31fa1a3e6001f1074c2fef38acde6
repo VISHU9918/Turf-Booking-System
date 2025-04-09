@@ -1,0 +1,21 @@
+private BookingResponse getBookingResponse(BookedTurf booking) {
+    Turf theTurf = turfService.getTurfById(booking.getTurf().getId()).orElseThrow(() -> new ResourceNotFoundException("Turf not found"));
+    TurfResponse turfResponse = new TurfResponse(
+            theTurf.getId(),
+            theTurf.getTurfType(),
+            theTurf.getTurfPrice());
+    
+    // Convert LocalDateTime to LocalDate
+    LocalDate startDate = booking.getStartTime().toLocalDate();
+    LocalDate endDate = booking.getEndTime().toLocalDate();
+
+    return new BookingResponse(
+            booking.getBookingId(),
+            startDate,
+            endDate,
+            booking.getGuestFullName(),
+            booking.getGuestEmail(),
+            booking.getTotalPlayers(),
+            booking.getBookingConfirmationCode(),
+            turfResponse);
+}

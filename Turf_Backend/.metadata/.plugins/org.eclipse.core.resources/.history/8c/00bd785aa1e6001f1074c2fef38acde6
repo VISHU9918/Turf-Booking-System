@@ -1,0 +1,97 @@
+package com.example.turf.controller;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+import com.example.turf.exception.InvalidBookingRequestException;
+import com.example.turf.exception.ResourceNotFoundException;
+import com.example.turf.model.BookedTurf;
+import com.example.turf.model.Turf;
+import com.example.turf.response.BookingResponse;
+import com.example.turf.response.TurfResponse;
+import com.example.turf.service.IBookingService;
+import com.example.turf.service.ITurfService;
+
+import java.util.ArrayList;
+import java.util.List;
+
+@RequiredArgsConstructor
+@RestController
+@RequestMapping("/bookings")
+public class BookingController {
+
+    private final IBookingService bookingService;
+    private final ITurfService turfService;
+
+    // Endpoint to get all bookings, accessible only by ADMIN role
+    @GetMapping("/all-bookings")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    public ResponseEntity<List<BookingResponse>> getAllBookings() {
+        List<BookedTurf> bookings = bookingService.getAllBookings();
+        List<BookingResponse> bookingResponses = new ArrayList<>();
+        for (BookedTurf booking : bookings) {
+            BookingResponse bookingResponse = getBookingResponse(booking);
+            bookingResponses.add(bookingResponse);
+        }
+        return ResponseEntity.ok(bookingResponses);
+    }
+
+    // Endpoint to save a new booking for a specific turf
+    @PostMapping("/turf/{turfId}/booking")
+    public ResponseEntity<?> saveBooking(@PathVariable Long turfId, @RequestBody BookedTurf bookingRequest) {
+        try {
+            String confirmationCode = bookingService.saveBooking(turfId, bookingRequest);
+            return ResponseEntity.ok("Turf booked successfully, Your booking confirmation code is: " + confirmationCode);
+        } catch (InvalidBookingRequestException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
+    // Endpoint to get booking details using confirmation code
+    @GetMapping("/confirmation/{confirmationCode}")
+    public ResponseEntity<?> getBookingByConfirmationCode(@PathVariable String confirmationCode) {
+        try {
+            BookedTurf booking = bookingService.findByBookingConfirmationCode(confirmationCode);
+            BookingResponse bookingResponse = getBookingResponse(booking);
+            return ResponseEntity.ok(bookingResponse);
+        } catch (ResourceNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ex.getMessage());
+        }
+    }
+
+    // Endpoint to get bookings by user's email
+    @GetMapping("/user/{email}/bookings")
+    public ResponseEntity<List<BookingResponse>> getBookingsByUserEmail(@PathVariable String email) {
+        List<BookedTurf> bookings = bookingService.getBookingsByUserEmail(email);
+        List<BookingResponse> bookingResponses = new ArrayList<>();
+        for (BookedTurf booking : bookings) {
+            BookingResponse bookingResponse = getBookingResponse(booking);
+            bookingResponses.add(bookingResponse);
+        }
+        return ResponseEntity.ok(bookingResponses);
+    }
+
+    // Endpoint to cancel a booking
+    @DeleteMapping("/booking/{bookingId}/delete")
+    public void cancelBooking(@PathVariable Long bookingId) {
+        bookingService.cancelBooking(bookingId);
+    }
+
+    // Helper method to convert BookedTurf to BookingResponse
+    private BookingResponse getBookingResponse(BookedTurf booking) {
+        Turf theTurf = turfService.getTurfById(booking.getTurf().getId()).orElseThrow(() -> new ResourceNotFoundException("Turf not found"));
+        TurfResponse turfResponse = new TurfResponse(
+                theTurf.getId(),
+                theTurf.getTurfType(),
+                theTurf.getTurfPrice());
+        return new BookingResponse(
+                booking.getBookingId(), booking.getCheckInDate(),
+                booking.getCheckOutDate(), booking.getGuestFullName(),
+                booking.getGuestEmail(), booking.getNumOfAdults(),
+                booking.getNumOfChildren(), booking.getTotalNumOfGuest(),
+                booking.getBookingConfirmationCode(), turfResponse);
+    }
+}
